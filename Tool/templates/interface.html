@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to Code Interface</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .hidden { display: none; }
+
+        .active-tab {
+            background-color: #E5E7EB;
+            border-color: transparent;
+        }
+        .inactive-tab {
+            background-color: #F3F4F6;
+            border-color: #E5E7EB;
+        }
+
+        .image-preview {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .sidebar {
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out;
+        }
+        .sidebar-open {
+            transform: translateX(0%);
+        }
+
+        .loading-wrapper {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .loading {
+            display: none;
+            border: 16px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 16px solid #3498db;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+        #eta-display { position: relative; top: 20px; }
+        @keyframes spin {
+            0%   { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Settings sidebar – per-method sections */
+        .method-section {
+            border: 1px solid #E5E7EB;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .method-section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .method-section-title::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        #settings-common   .method-section-title::before { background-color: #6B7280; }
+        #settings-direct   .method-section-title::before { background-color: #F59E0B; }
+        #settings-dcgen    .method-section-title::before { background-color: #3B82F6; }
+        #settings-method2 .method-section-title::before { background-color: #10B981; }
+
+        .settings-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 0.25rem;
+            margin-top: 0.6rem;
+        }
+        .settings-input {
+            width: 100%;
+            background-color: #F3F4F6;
+            border: 1px solid #D1D5DB;
+            padding: 0.4rem 0.6rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+        .settings-input:focus { outline: none; }
+    </style>
+</head>
+
+<body class="bg-gray-200">
+    <div class="flex flex-col" >
+        <div class="flex relative min-w-80">
+
+            <!-- Left Panel -->
+            <div class="w-1/2 bg-gray-100 p-4 border border-gray-300 rounded-md relative flex flex-col">
+
+                <!-- Upload button -->
+                <div class="absolute top-0 right-0 m-4">
+                    <label for="file-upload" class="cursor-pointer">
+                        <div class="bg-gray-500 text-white font-semibold py-2 px-4 rounded hover:bg-gray-600">
+                            Upload
+                        </div>
+                    </label>
+                    <input id="file-upload" type="file" class="hidden" accept="image/*" onchange="displayImage(event)" />
+                </div>
+
+                <!-- Image panel -->
+                <div id="image-panel" class="flex-grow" style="min-height: 80vh;">
+                    <div class="flex flex-col items-center justify-center h-full bg-gray-300 border border-gray-400 rounded-md">
+                        <div id="image-display" class="flex items-center justify-center h-full w-full">
+                            <p class="text-center text-gray-500">Upload an image or use the example</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Panel -->
+            <div class="w-1/2 bg-gray-100 p-4 border border-gray-300 rounded-md flex flex-col">
+
+                <!-- Code / Result tabs -->
+                <div class="flex justify-start mb-4">
+                    <button id="code-tab"
+                        class="px-4 py-2 font-semibold text-sm text-gray-700 bg-gray-300 active-tab rounded-tl-lg hover:bg-gray-400 focus:outline-none"
+                        onclick="showCode()">Code</button>
+                    <button id="result-tab"
+                        class="px-4 py-2 font-semibold text-sm text-gray-700 bg-white border-b-2 inactive-tab hover:bg-gray-100 focus:outline-none"
+                        onclick="showResult()">Result Web</button>
+                </div>
+
+                <!-- Action buttons + method selector (top-right, absolute) -->
+                <div class="absolute top-0 right-0 m-4 flex items-center gap-2">
+                    <select id="method-select"
+                        class="bg-gray-200 text-gray-700 font-semibold py-2 px-3 rounded border border-gray-300 focus:outline-none">
+                        <option value="direct">Direct</option>
+                        <option value="dcgen">DCGen</option>
+                        <option value="method2">Method_2</option>
+                    </select>
+                    <button
+                        class="bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 focus:outline-none"
+                        onclick="generateCode()">Generate Code</button>
+                    <button
+                        class="bg-white text-blue-500 font-semibold py-2 px-4 rounded-lg hover:bg-gray-200 focus:outline-none"
+                        onclick="toggleSidebar()">Settings</button>
+                </div>
+
+                <!-- Code panel -->
+                <div id="code-panel"
+                    class="h-full bg-white border border-gray-400 rounded-md p-4 overflow-auto flex-grow" style="min-height: 80vh;">
+                    <textarea id="html-code"
+                        class="w-full h-full p-4 bg-gray-100 border border-gray-300 rounded focus:outline-none"
+                        spellcheck="false"></textarea>
+                </div>
+
+                <!-- Result panel -->
+                <div id="result-panel" class="h-full bg-white border border-gray-400 rounded-md hidden flex-grow relative">
+                    <div id="iframe-scaler" style="transform-origin: top left;">
+                        <iframe id="rendered-result" class="border-none" style="width: 1280px; height: 900px;"></iframe>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Settings Sidebar -->
+        <div id="sidebar"
+            class="fixed top-0 right-0 w-1/3 h-full bg-white border-l border-gray-300 p-4 shadow-lg sidebar overflow-auto">
+            <h2 class="text-xl font-semibold mb-4">Settings</h2>
+
+            <!-- Common settings (always visible) -->
+            <div class="method-section" id="settings-common">
+                <div class="method-section-title text-gray-500">Common</div>
+                <label class="settings-label" for="model-list">Model:</label>
+                <select class="settings-input" id="model-list">
+                    <option>GPT-4o</option>
+                </select>
+                <label class="settings-label" for="model-key">API Key:</label>
+                <input type="text" class="settings-input" id="model-key" placeholder="Enter your API key…">
+            </div>
+
+            <!-- Direct settings -->
+            <div class="method-section" id="settings-direct">
+                <div class="method-section-title text-yellow-500">Direct</div>
+                <p class="text-sm text-gray-500">
+                    No additional settings. The full screenshot is sent to the model in a single call.
+                </p>
+            </div>
+
+            <!-- DCGen settings (hidden until DCGen is selected) -->
+            <div class="method-section hidden" id="settings-dcgen">
+                <div class="method-section-title text-blue-500">DCGen</div>
+
+                <label class="settings-label" for="dcgen-depth-input">Segmentation Depth:</label>
+                <input type="number" class="settings-input" id="dcgen-depth-input" value="2" min="1" max="5">
+
+                <label class="settings-label" for="dcgen-leaf-prompt">Segment Prompt:</label>
+                <textarea id="dcgen-leaf-prompt"
+                    class="settings-input h-28 resize-y">Here is a prototype image of a container. Please fill a single piece of HTML and tail-wind CSS code to reproduce exactly the given container. Use 'placeholder.png' to replace the images. Pay attention to things like size, text, and color of all the elements, as well as the background color and layout. Here is the code for you to fill in:
+                    <div>
+                    Your code here
+                    </div>
+                    Respond with only the code inside the &lt;div&gt; tags.</textarea>
+
+                                <label class="settings-label" for="dcgen-final-prompt">Refinement Prompt:</label>
+                                <textarea id="dcgen-final-prompt"
+                                    class="settings-input h-28 resize-y">Here is a prototype image of a webpage. I have an draft HTML file that contains most of the elements and their correct positions, but it has *inaccurate background*, and some missing or wrong elements. Please compare the draft and the prototype image, then revise the draft implementation. Return a single piece of accurate HTML+tail-wind CSS code to reproduce the website. Use "placeholder.png" to replace the images. Respond with the content of the HTML+tail-wind CSS code. The current implementation I have is:
+
+                [CODE]</textarea>
+
+                <button
+                    class="mt-3 bg-gray-100 text-blue-500 font-semibold py-2 px-4 rounded-lg hover:bg-gray-200 focus:outline-none text-sm"
+                    onclick="resetDCGenPrompts()">Reset prompts</button>
+            </div>
+
+            <!-- method2 settings (hidden until method2 is selected) -->
+            <div class="method-section hidden" id="settings-method2">
+                <div class="method-section-title text-green-600">method2</div>
+
+                <label class="settings-label" for="method2-yolo-model">YOLO Model Path:</label>
+                <input type="text" class="settings-input" id="method2-yolo-model"
+                    value="models/yolo11n_400_best.pt">
+
+                <label class="settings-label" for="method2-use-composite">Use Composite Image:</label>
+                <select class="settings-input" id="method2-use-composite">
+                    <option value="false">False — segment crop only</option>
+                    <option value="true">True — full page + crop side-by-side</option>
+                </select>
+
+                <label class="settings-label" for="method2-use-vlm-dedup">Use VLM Dedup:</label>
+                <select class="settings-input" id="method2-use-vlm-dedup">
+                    <option value="true">True — run VLM deduplication pass</option>
+                    <option value="false">False — skip deduplication</option>
+                </select>
+
+                <label class="settings-label" for="method2-use-bg-color">Use Background Color:</label>
+                <select class="settings-input" id="method2-use-bg-color">
+                    <option value="false">False — transparent body background</option>
+                    <option value="true">True — sample dominant color from edges</option>
+                </select>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Loading spinner -->
+    <div class="loading-wrapper">
+        <div class="loading" id="loading"></div>
+        <p id="eta-display" class="text-center text-black font-bold mt-4"></p>
+    </div>
+
+    <script>
+        // Load example image on startup
+        displayExampleImage();
+
+        //  Loading animation
+        function startLoadingWithEta(minutes) {
+            let etaSeconds = Math.max(parseInt(minutes) * 60, 10);
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('eta-display').style.display = 'block';
+
+            const update = () => {
+                const m = Math.floor(etaSeconds / 60);
+                const s = etaSeconds % 60;
+                document.getElementById('eta-display').textContent =
+                    `ETA: ${m}:${s < 10 ? '0' : ''}${s}`;
+                if (etaSeconds > 0) etaSeconds--;
+                else clearInterval(timer);
+            };
+            update();
+            const timer = setInterval(update, 1000);
+
+            return () => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('eta-display').style.display = 'none';
+                clearInterval(timer);
+            };
+        }
+
+        // Code / Result tab switching
+        function showCode() {
+            document.getElementById('code-tab').classList.replace('inactive-tab', 'active-tab');
+            document.getElementById('result-tab').classList.replace('active-tab', 'inactive-tab');
+            document.getElementById('code-panel').classList.remove('hidden');
+            document.getElementById('result-panel').classList.add('hidden');
+        }
+
+        function showResult() {
+            document.getElementById('result-tab').classList.replace('inactive-tab', 'active-tab');
+            document.getElementById('code-tab').classList.replace('active-tab', 'inactive-tab');
+            document.getElementById('result-panel').classList.remove('hidden');
+            document.getElementById('code-panel').classList.add('hidden');
+
+            const iframe = document.getElementById('rendered-result');
+            const panel  = document.getElementById('result-panel');
+            const scaler = document.getElementById('iframe-scaler');
+            const scale  = panel.clientWidth / 1280;
+
+            iframe.style.width  = '1280px';
+            iframe.style.height = '900px'; // temporary until content loads
+            iframe.srcdoc = document.getElementById('html-code').value;
+
+            iframe.onload = function () {
+                const contentHeight = iframe.contentDocument.documentElement.scrollHeight || 900;
+                iframe.style.height = contentHeight + 'px';
+                scaler.style.transform = `scale(${scale})`;
+                scaler.style.height = `${contentHeight * scale}px`;
+            };
+        }
+
+        // Settings sidebar 
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('sidebar-open');
+        }
+
+        document.addEventListener('click', function (event) {
+            const sidebar = document.getElementById('sidebar');
+            const settingsBtn = document.querySelector('button[onclick="toggleSidebar()"]');
+            if (!sidebar.contains(event.target) && !settingsBtn.contains(event.target)) {
+                sidebar.classList.remove('sidebar-open');
+            }
+        });
+
+        // Show only the settings section for the currently selected method
+        function updateMethodSettings(method) {
+            document.getElementById('settings-direct').classList.toggle('hidden',   method !== 'direct');
+            document.getElementById('settings-dcgen').classList.toggle('hidden',    method !== 'dcgen');
+            document.getElementById('settings-method2').classList.toggle('hidden', method !== 'method2');
+        }
+
+        document.getElementById('method-select').addEventListener('change', function () {
+            updateMethodSettings(this.value);
+        });
+
+        // DCGen prompt reset
+        function resetDCGenPrompts() {
+            document.getElementById('dcgen-leaf-prompt').value =
+                "Here is a prototype image of a container. Please fill a single piece of HTML and tail-wind CSS code to reproduce exactly the given container. Use 'placeholder.png' to replace the images. Pay attention to things like size, text, and color of all the elements, as well as the background color and layout. Here is the code for you to fill in:\n    <div>\n    Your code here\n    </div>\n    Respond with only the code inside the <div> tags.";
+            document.getElementById('dcgen-final-prompt').value =
+                "Here is a prototype image of a webpage. I have an draft HTML file that contains most of the elements and their correct positions, but it has *inaccurate background*, and some missing or wrong elements. Please compare the draft and the prototype image, then revise the draft implementation. Return a single piece of accurate HTML+tail-wind CSS code to reproduce the website. Use \"placeholder.png\" to replace the images. Respond with the content of the HTML+tail-wind CSS code. The current implementation I have is:\n\n[CODE]";
+        }
+
+        // Generate Code 
+        async function generateCode() {
+            const imgElement = document.getElementById('image-display').getElementsByTagName('img')[0];
+            if (!imgElement) {
+                alert('Please upload an image first.');
+                return;
+            }
+
+            const method  = document.getElementById('method-select').value;
+            const payload = { image: imgElement.src, method };
+
+            if (method === 'dcgen') {
+                payload.dcgen_depth  = document.getElementById('dcgen-depth-input').value;
+                payload.prompt_leaf  = document.getElementById('dcgen-leaf-prompt').value;
+                payload.prompt_final = document.getElementById('dcgen-final-prompt').value;
+            } else if (method === 'method2') {
+                payload.method2_yolo_model    = document.getElementById('method2-yolo-model').value;
+                payload.method2_use_composite = document.getElementById('method2-use-composite').value === 'true';
+                payload.method2_use_vlm_dedup = document.getElementById('method2-use-vlm-dedup').value === 'true';
+                payload.method2_use_bg_color  = document.getElementById('method2-use-bg-color').value === 'true';
+            }
+
+            const etaMinutes = method === 'method2' ? 5 : method === 'dcgen' ? 3 : 1;
+            const stopLoading = startLoadingWithEta(etaMinutes);
+
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                stopLoading();
+
+                if (result.error) {
+                    alert('Error: ' + result.error);
+                    return;
+                }
+
+                document.getElementById('html-code').value = result.html;
+                showResult();
+            } catch (err) {
+                stopLoading();
+                alert('Network error: ' + err.message);
+            }
+        }
+
+        // Image helpers
+        async function getExampleImage() {
+            try {
+                const res = await fetch('/example_image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (!res.ok) throw new Error('Bad response');
+                return (await res.json()).image;
+            } catch (e) {
+                console.error('Error fetching example image:', e);
+                return null;
+            }
+        }
+
+        async function displayExampleImage() {
+            const url = await getExampleImage();
+            if (url) {
+                document.getElementById('image-display').innerHTML =
+                    `<img src="${url}" alt="Example Image" class="image-preview rounded-md">`;
+            }
+        }
+
+        function displayImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.alt = 'Uploaded Image';
+                img.classList.add('image-preview', 'rounded-md');
+                const display = document.getElementById('image-display');
+                display.innerHTML = '';
+                display.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+__pycache__/
+*.log
+.DS_Store
+*.key
+*.txt
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

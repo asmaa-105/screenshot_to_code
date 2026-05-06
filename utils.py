@@ -89,6 +89,11 @@ class Bot:
             with open(key_path, "r") as f:
                 self.key = f.read().replace("\n", "")
         else:
+            # Support direct API key strings, but reject missing key-file paths.
+            if os.path.sep in str(key_path) or str(key_path).endswith(".txt"):
+                raise FileNotFoundError(
+                    f"API key file not found: {key_path}. Create it or pass a raw API key string."
+                )
             self.key = key_path
         self.patience = patience
     
@@ -151,6 +156,8 @@ class Bot:
                     except Exception as e:
                         print(e, "waiting for 5 seconds")
                         time.sleep(5)
+        if not responses:
+            return None
         return self.optimize(responses, image_encoding) 
 
 
@@ -172,6 +179,12 @@ class Bot:
         </body>
         </html>
         """
+        if not candidates:
+            return None
+        # Default to first non-empty candidate; refined below if rendering succeeds.
+        best_response = next((c for c in candidates if c), None)
+        if best_response is None:
+            return None
         with sync_playwright() as p:
             # Start Playwright context manually
             browser = p.chromium.launch(headless=True)
@@ -183,6 +196,8 @@ class Bot:
             page.set_viewport_size({"width": img.size[0], "height": img.size[1]})
             # print("Image size:", np.array(img).shape)
             for candidate in candidates:
+                if not candidate:
+                    continue
             # Set the content of the page to the candidate HTML
                 code = re.findall(r"```html([^`]+)```", candidate)
                 if code:
@@ -996,7 +1011,11 @@ class DCGenGrid:
             if node["children"] == []:
                 bbox = node["bbox"]
                 cropped_img = self.img.crop(bbox)
-                code = bot.try_ask(self.prompt_seg, encode_image(cropped_img), num_generations=2).replace("```html", "").replace("```", "")
+                code = bot.try_ask(self.prompt_seg, encode_image(cropped_img), num_generations=2)
+                if code is None:
+                    code = ""
+                else:
+                    code = code.replace("```html", "").replace("```", "")
                 code_dict[node["id"]] = code
             else:
                 for child in node["children"]:
@@ -1015,7 +1034,11 @@ class DCGenGrid:
                 bbox = node["bbox"]
                 cropped_img = self.img.crop(bbox)
                 # print(f"Generating code for node {node['id']} with bbox {bbox}")
-                generated_code = bot.try_ask(self.prompt_seg, encode_image(cropped_img), num_generations=2).replace("```html", "").replace("```", "")
+                generated_code = bot.try_ask(self.prompt_seg, encode_image(cropped_img), num_generations=2)
+                if generated_code is None:
+                    generated_code = ""
+                else:
+                    generated_code = generated_code.replace("```html", "").replace("```", "")
                 code_dict[node["id"]] = generated_code
             else:
                 for child in node["children"]:

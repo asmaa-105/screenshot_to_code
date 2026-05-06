@@ -4,6 +4,7 @@ import sys
 import os
 import tempfile
 import base64
+import importlib.util
 from io import BytesIO
 from PIL import Image
 
@@ -18,6 +19,7 @@ from utils_method2 import YOLOSegmentation
 from experiments import Method2Grid, prompt_method_2
 
 app = Flask(__name__)
+_METHOD1_UTILS = None
 
 _PROMPT_DIRECT = (
     'Here is a prototype image of a webpage. Return a single piece of HTML and '
@@ -47,6 +49,37 @@ _PROMPT_DCGEN_ROOT = (
 )
 
 
+def _read_api_key(key_path):
+    if not os.path.exists(key_path):
+        raise FileNotFoundError(f"API key file not found: {key_path}")
+    with open(key_path, 'r', encoding='utf-8') as f:
+        key = f.read().strip()
+    if not key:
+        raise ValueError(f"API key file is empty: {key_path}")
+    return key
+
+
+def _load_method1_utils():
+    global _METHOD1_UTILS
+    if _METHOD1_UTILS is not None:
+        return _METHOD1_UTILS
+
+    method1_utils_path = os.path.join(_ROOT, 'Element_Tree_Trial', 'utils.py')
+    if not os.path.exists(method1_utils_path):
+        raise FileNotFoundError(
+            f"Method 1 utils not found at {method1_utils_path}"
+        )
+
+    spec = importlib.util.spec_from_file_location('element_tree_trial_utils', method1_utils_path)
+    if spec is None or spec.loader is None:
+        raise ImportError("Failed to load Method 1 module spec.")
+
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _METHOD1_UTILS = mod
+    return _METHOD1_UTILS
+
+
 @app.route('/')
 def index():
     return render_template('interface.html')
@@ -68,7 +101,9 @@ def generate():
 
     try:
         bot = GPT4(os.path.join(_ROOT, 'keys', 'key.txt'), model='gpt-4o')
-        img = Image.open(BytesIO(base64.b64decode(image_base64.split(',')[1])))
+        if not image_base64 or ',' not in image_base64:
+            return jsonify({"error": "No valid image payload provided."}), 400
+        img = Image.open(BytesIO(base64.b64decode(image_base64.split(',', 1)[1])))
 
         # Direct 
         if method == 'direct':
@@ -121,6 +156,36 @@ def generate():
                 )
                 grid.generate_code(bot, multi_thread=True)
                 return jsonify({"html": grid.code})
+            finally:
+                os.unlink(tmp_path)
+
+        # Method1 (Element Tree Trial)
+        elif method == 'method1':
+            method1_min_ocr_conf = float(data.get('method1_min_ocr_conf', 0.4))
+            method1_utils = _load_method1_utils()
+            key_path = os.path.join(_ROOT, 'keys', 'key.txt')
+            api_key = _read_api_key(key_path)
+            method1_bot = method1_utils.GPT4(key_path, model='gpt-4o')
+
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                img.save(tmp.name)
+                tmp_path = tmp.name
+
+            sample_out_dir = tempfile.mkdtemp()
+            try:
+                outputs = method1_utils.process_image_full_pipeline(
+                    image_path=tmp_path,
+                    sample_out_dir=sample_out_dir,
+                    api_key=api_key,
+                    bot=method1_bot,
+                    min_ocr_conf=method1_min_ocr_conf,
+                )
+                html_path = outputs.get("html_path")
+                if not html_path or not os.path.exists(html_path):
+                    raise RuntimeError("Method 1 did not produce output HTML.")
+                with open(html_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    html = f.read()
+                return jsonify({"html": html})
             finally:
                 os.unlink(tmp_path)
 

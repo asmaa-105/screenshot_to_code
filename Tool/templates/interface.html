@@ -80,6 +80,7 @@
         #settings-common   .method-section-title::before { background-color: #6B7280; }
         #settings-direct   .method-section-title::before { background-color: #F59E0B; }
         #settings-dcgen    .method-section-title::before { background-color: #3B82F6; }
+        #settings-method1 .method-section-title::before { background-color: #8B5CF6; }
         #settings-method2 .method-section-title::before { background-color: #10B981; }
 
         .settings-label {
@@ -149,6 +150,7 @@
                         class="bg-gray-200 text-gray-700 font-semibold py-2 px-3 rounded border border-gray-300 focus:outline-none">
                         <option value="direct">Direct</option>
                         <option value="dcgen">DCGen</option>
+                        <option value="method1">Method_1</option>
                         <option value="method2">Method_2</option>
                     </select>
                     <button
@@ -225,6 +227,15 @@
                 <button
                     class="mt-3 bg-gray-100 text-blue-500 font-semibold py-2 px-4 rounded-lg hover:bg-gray-200 focus:outline-none text-sm"
                     onclick="resetDCGenPrompts()">Reset prompts</button>
+            </div>
+
+            <!-- method2 settings (hidden until method2 is selected) -->
+            <div class="method-section hidden" id="settings-method1">
+                <div class="method-section-title text-purple-600">method1</div>
+
+                <label class="settings-label" for="method1-min-ocr-conf">Minimum OCR Confidence:</label>
+                <input type="number" class="settings-input" id="method1-min-ocr-conf"
+                    value="0.4" min="0" max="1" step="0.05">
             </div>
 
             <!-- method2 settings (hidden until method2 is selected) -->
@@ -339,6 +350,7 @@
         function updateMethodSettings(method) {
             document.getElementById('settings-direct').classList.toggle('hidden',   method !== 'direct');
             document.getElementById('settings-dcgen').classList.toggle('hidden',    method !== 'dcgen');
+            document.getElementById('settings-method1').classList.toggle('hidden', method !== 'method1');
             document.getElementById('settings-method2').classList.toggle('hidden', method !== 'method2');
         }
 
@@ -374,9 +386,14 @@
                 payload.method2_use_composite = document.getElementById('method2-use-composite').value === 'true';
                 payload.method2_use_vlm_dedup = document.getElementById('method2-use-vlm-dedup').value === 'true';
                 payload.method2_use_bg_color  = document.getElementById('method2-use-bg-color').value === 'true';
+            } else if (method === 'method1') {
+                payload.method1_min_ocr_conf = parseFloat(document.getElementById('method1-min-ocr-conf').value || '0.4');
             }
 
-            const etaMinutes = method === 'method2' ? 5 : method === 'dcgen' ? 3 : 1;
+            const etaMinutes =
+                method === 'method2' ? 5 :
+                method === 'method1' ? 4 :
+                method === 'dcgen' ? 3 : 1;
             const stopLoading = startLoadingWithEta(etaMinutes);
 
             try {

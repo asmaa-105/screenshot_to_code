@@ -11,3 +11,6 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Jupyter notebooks in Element_Tree_Trial may contain API keys in saved outputs
+Element_Tree_Trial/*.ipynb
